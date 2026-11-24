@@ -1,0 +1,114 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>АгроСенс — платформа для агронома</title><meta name="description" content="Контроль самосогревания в хранилищах картофеля, овощей и зерна">
+<style>
+:root{--p:#5a3ff5;--lime:#c6f51f;--bg:#f3f1fb;--card:#fff;--t:#1d1b2e;--m:#6b6880;--ok:#b5e61d;--watch:#ffe066;--warn:#ffa630;--crit:#ff4d6d;--nd:#e6e3f2}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--t)}
+header{background:var(--p);color:#fff;padding:14px 16px;position:sticky;top:0;z-index:5}
+header h1{margin:0;font-size:22px;color:var(--lime)}header small{opacity:.8}
+nav{display:flex;gap:6px;overflow-x:auto;padding:10px 12px;background:var(--p);position:sticky;top:58px;z-index:5}
+nav button{flex:none;border:0;border-radius:12px;padding:8px 12px;background:rgba(255,255,255,.12);color:#fff;font-weight:600;font-size:14px}
+nav button.on{background:var(--lime);color:var(--t)}.badge{background:var(--crit);color:#fff;border-radius:9px;padding:0 6px;font-size:11px;margin-left:4px}
+main{padding:14px;max-width:1100px;margin:auto}h2{margin:6px 0 2px}.sub{color:var(--m);font-size:13px;margin-bottom:12px}
+.card{background:var(--card);border-radius:18px;padding:14px;margin-bottom:12px;box-shadow:0 2px 10px rgba(60,40,160,.06)}
+.kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:12px}@media(min-width:800px){.kpis{grid-template-columns:repeat(4,1fr)}.grid4{grid-template-columns:repeat(4,1fr)!important}}
+.kpi{background:#fff;border-radius:18px;padding:14px}.kpi b{font-size:26px;color:var(--p);display:block}.kpi.main{background:var(--p);color:#fff}.kpi.main b{color:var(--lime)}.kpi span{font-size:12px;color:var(--m)}.kpi.main span{color:#ddd}
+.grid4{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.sec{border:2px solid transparent;border-radius:16px;padding:10px;background:#faf9ff;cursor:pointer}.sec.warn{border-color:var(--warn)}.sec.crit{border-color:var(--crit)}
+.sec h3{margin:0 0 6px;font-size:15px;display:flex;justify-content:space-between;align-items:center;gap:4px;flex-wrap:wrap}
+.dots{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;justify-items:center;margin:6px 0}
+.dot{width:22px;height:22px;border-radius:50%;border:2px solid rgba(0,0,0,.15)}
+.pill{border-radius:10px;padding:2px 8px;font-size:11px;font-weight:700}
+.l0{background:var(--ok)}.l1{background:var(--watch)}.l2{background:var(--warn)}.l3{background:var(--crit);color:#fff}
+.bar{height:8px;background:#eceaf7;border-radius:6px;overflow:hidden}.bar i{display:block;height:100%}
+.tiny{font-size:11px;color:var(--m)}select,input,textarea{font:inherit;padding:8px;border:1px solid #ddd;border-radius:10px;background:#fff;max-width:100%}
+.btn{border:0;border-radius:12px;padding:10px 14px;font-weight:700;background:var(--p);color:#fff;font-size:14px}.btn.alt{background:#e9e5ff;color:var(--p)}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.list>div{padding:10px 0;border-bottom:1px solid #eee}.list>div:last-child{border:0}
+table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:6px;border-bottom:1px solid #eee;text-align:left}
+canvas{width:100%;height:220px}.msg{padding:10px;border-radius:12px;margin:6px 0;white-space:pre-wrap}.me{background:#e9e5ff;margin-left:20%}.ai{background:#f4f4f8;margin-right:10%}
+footer{padding:12px;text-align:center;font-size:12px;color:var(--m)}
+</style></head><body>
+<header><h1>АгроСенс</h1><small>платформа для агронома · <span id="clock"></span></small></header>
+<nav id="nav"></nav><main id="main"></main>
+<footer>Демо-режим: данные датчиков смоделированы. Время ускорено ×60.</footer>
+<script>
+const S=4,R=4,D=3,DEP=['верх','середина','низ'],LV=['Норма','Наблюдение','Предупреждение','Критично'],COL=['var(--ok)','var(--watch)','var(--warn)','var(--crit)'];
+const STEP=5*60000,MAX=9,HL=1.5;let now=Date.now();
+const rnd=(()=>{let s=42;return()=>(s=(s*16807)%2147483647)/2147483647})();
+const secOff=[],rodOff=[];for(let s=0;s<S;s++){secOff[s]=(rnd()-.5)*.3;rodOff[s]=[];for(let r=0;r<R;r++)rodOff[s][r]=(rnd()-.5)*.2}
+let hot=[],hist={},alerts=[],batches=[
+{id:'П-2026-01',crop:'Картофель «Скарб»',sec:1,t:120,date:'2026-09-12'},{id:'П-2026-02',crop:'Картофель «Бриз»',sec:2,t:140,date:'2026-09-20'},
+{id:'П-2026-03',crop:'Морковь «Нантская»',sec:3,t:90,date:'2026-10-02'},{id:'П-2026-04',crop:'Зерно (ячмень)',sec:4,t:150,date:'2026-08-28'}];
+const key=(s,r,d)=>s+'-'+r+'-'+d;
+function excess(h,t){if(!h.mit)return Math.min(MAX,Math.max(0,h.rate*(t-h.start)/36e5));return h.ex0*Math.pow(.5,Math.max(0,(t-h.mt)/36e5)/HL)}
+function gen(t){const daily=Math.sin(t/864e5*2*Math.PI)*.15;for(let s=0;s<S;s++)for(let r=0;r<R;r++)for(let d=0;d<D;d++){
+let v=4.5+secOff[s]+rodOff[s][r]+d*.15+daily+(rnd()-.5)*.12;for(const h of hot)if(h.s==s&&h.r==r){const e=excess(h,t);v+=h.d==d?e:e*.35}
+const k=key(s,r,d);(hist[k]=hist[k]||[]).push([t,v]);if(hist[k].length>400)hist[k].shift()}}
+for(let k=144;k>=1;k--)gen(now-k*STEP);
+function last(k){const a=hist[k];return a[a.length-1][1]}
+function rate(k){const a=hist[k],n=a.length,b=a[Math.max(0,n-13)];return (a[n-1][1]-b[1])/((a[n-1][0]-b[0])/36e5||1)}
+function point(s,r,d){const k=key(s,r,d),v=last(k);let nb=[];for(let rr=0;rr<R;rr++)if(rr!=r)nb.push(last(key(s,rr,d)));nb.sort((a,b)=>a-b);
+const med=nb[1],delta=v-med,rt=rate(k);let l=0;if(delta>=1||rt>=.5)l=1;if(delta>=2||rt>=1||v>=9)l=2;if(delta>=4||rt>=2||v>=12)l=3;return{v,delta,rt,l}}
+function section(s){let pts=[],mx=0,md=-99,eta=null;for(let d=0;d<D;d++)for(let r=0;r<R;r++){const p=point(s,r,d);p.r=r;p.d=d;pts.push(p);mx=Math.max(mx,p.l);
+if(p.delta>md)md=p.delta;if(p.rt>.1){const e=(12-p.v)/p.rt;if(e>0&&(eta==null||e<eta))eta=e}}
+const avg=pts.reduce((a,p)=>a+p.v,0)/pts.length,risk=Math.min(100,Math.round(Math.max(0,md)*12+Math.max(...pts.map(p=>p.rt))*25+mx*10));
+return{s,pts,lvl:mx,md,eta,avg,risk,hum:91,co2:Math.round(1220+Math.max(0,md)*30)}}
+let lastLvl=[0,0,0,0];
+function check(){for(let s=0;s<S;s++){const x=section(s);if(x.lvl>lastLvl[s]&&x.lvl>0){const p=x.pts.reduce((a,b)=>b.delta>a.delta?b:a);
+alerts.unshift({s,l:x.lvl,t:now,ack:false,text:`Секция ${s+1}: ${LV[x.lvl].toLowerCase()}`,det:`Штанга ${p.r+1}, ${DEP[p.d]}: ${p.v.toFixed(1)} °C, на ${p.delta.toFixed(1)} °C выше соседних, рост ${p.rt.toFixed(2)} °C/ч.`,rec:rec(x.lvl)})}lastLvl[s]=x.lvl}}
+function rec(l){return['Хранение в штатном режиме.','Усилить наблюдение, проверить точку при обходе.','Проверить очаг, включить активное вентилирование, запланировать отгрузку в ближайшее время.','Срочно: вентилирование, вскрытие очага, отгрузка секции в первую очередь.'][l]}
+const fmt=t=>new Date(t).toLocaleString('ru',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+let tab='Обзор',curSec=1,chat=[];const TABS=['Обзор','Секция','Оповещения','Отгрузка','Партии','Ассистент ИИ'];
+function navR(){const n=alerts.filter(a=>!a.ack).length;document.getElementById('nav').innerHTML=TABS.map(t=>`<button class="${t==tab?'on':''}" onclick="go('${t}')">${t}${t=='Оповещения'&&n?`<span class="badge">${n}</span>`:''}</button>`).join('')}
+function go(t,s){tab=t;if(s!=null)curSec=s;render();scrollTo(0,0)}
+const pill=l=>`<span class="pill l${l}">${LV[l]}</span>`;
+function secCard(x){return`<div class="sec ${x.lvl==2?'warn':x.lvl==3?'crit':''}" onclick="go('Секция',${x.s})"><h3>Секция ${x.s+1} ${pill(x.lvl)}</h3>
+<div class="dots">${[0,1,2].map(d=>[0,1,2,3].map(r=>`<div class="dot" style="background:${COL[x.pts.find(p=>p.r==r&&p.d==d).l]}"></div>`).join('')).join('')}</div>
+<div class="tiny">T ${x.avg.toFixed(1)} °C · ${x.hum} % · CO₂ ${x.co2}</div><div class="bar" style="margin:6px 0"><i style="width:${x.risk}%;background:${COL[x.lvl]}"></i></div><b style="font-size:12px">Риск ${x.risk} / 100</b></div>`}
+function queue(){return[...Array(S).keys()].map(section).sort((a,b)=>b.risk-a.risk)}
+function overview(){const xs=[...Array(S).keys()].map(section),ok=xs.filter(x=>x.lvl==0).length,md=Math.max(...xs.map(x=>x.md)),etas=xs.map(x=>x.eta).filter(e=>e!=null);
+return`<h2>Обзор хранилища</h2><div class="sub">Хранилище на 500 т · 4 секции · 4 штанги · 3 датчика на штанге</div>
+<div class="card"><div class="row"><span class="pill" style="background:var(--lime)">ДЕМО</span>
+<select id="hs">${[1,2,3,4].map(i=>`<option ${i==2?'selected':''} value=${i-1}>Секция ${i}</option>`)}</select>
+<select id="hr">${[1,2,3,4].map(i=>`<option ${i==2?'selected':''} value=${i-1}>Штанга ${i}</option>`)}</select>
+<select id="hd">${DEP.map((d,i)=>`<option ${i==1?'selected':''} value=${i}>${d}</option>`)}</select>
+<select id="hv"><option value="1.5">нагрев обычный</option><option value="3">нагрев быстрый</option></select>
+<button class="btn" onclick="inject()">Имитировать очаг</button><button class="btn alt" onclick="mitigate()">Устранить причину</button></div>
+<div class="tiny" style="margin-top:6px">Запустите очаг нагрева и посмотрите, как платформа его обнаружит.</div></div>
+<div class="kpis"><div class="kpi main"><b>${ok} из 4</b><span>Секций в норме</span></div><div class="kpi"><b>${alerts.filter(a=>!a.ack).length}</b><span>Активные оповещения</span></div>
+<div class="kpi"><b>${md>0?'+':''}${md.toFixed(1).replace('.',',')} °C</b><span>Макс. отклонение от соседних точек</span></div><div class="kpi"><b>${etas.length?'≈ '+Math.min(...etas).toFixed(1).replace('.',',')+' ч':'—'}</b><span>До критической температуры</span></div></div>
+<div class="card"><h3 style="margin:0">План хранилища</h3><div class="tiny" style="margin-bottom:8px">Строки — глубина: верх, середина, низ. Нажмите на секцию.</div><div class="grid4">${xs.map(secCard).join('')}</div></div>
+<div class="card"><h3 style="margin:0">Очередь отгрузки</h3><div class="list">${queue().map((x,i)=>`<div><b style="color:var(--p)">${i+1}.</b> Секция ${x.s+1} ${pill(x.lvl)}<div class="tiny">${rec(x.lvl)}</div></div>`).join('')}</div></div>`}
+function inject(){const s=+hs.value,r=+hr.value,d=+hd.value;hot.push({s,r,d,rate:+hv.value,start:now,mit:false});render()}
+function mitigate(){hot.forEach(h=>{if(!h.mit){h.ex0=excess(h,now);h.mt=now;h.mit=true}});render()}
+function secView(){const x=section(curSec);return`<h2>Секция ${curSec+1} ${pill(x.lvl)}</h2><div class="sub">Риск ${x.risk}/100 · ${x.eta?'прогноз до 12 °C ≈ '+x.eta.toFixed(1)+' ч':'роста нет'}</div>
+<div class="row" style="margin-bottom:10px">${[0,1,2,3].map(s=>`<button class="btn ${s==curSec?'':'alt'}" onclick="go('Секция',${s})">С${s+1}</button>`).join('')}</div>
+<div class="card"><b>Температура за 12 ч, °C</b><canvas id="ch" width="900" height="300"></canvas><div class="tiny">Самая тёплая точка выделена красным.</div></div>
+<div class="card" style="overflow-x:auto"><table><tr><th>Точка</th><th>T, °C</th><th>Δ</th><th>°C/ч</th><th>Уровень</th></tr>${x.pts.map(p=>`<tr><td>Ш${p.r+1} · ${DEP[p.d]}</td><td>${p.v.toFixed(1)}</td><td>${p.delta.toFixed(1)}</td><td>${p.rt.toFixed(2)}</td><td>${pill(p.l)}</td></tr>`).join('')}</table></div>
+<div class="card"><b>Рекомендация:</b> ${rec(x.lvl)}</div>`}
+function chart(){const c=document.getElementById('ch');if(!c)return;const g=c.getContext('2d'),x=section(curSec),hotP=x.pts.reduce((a,b)=>b.v>a.v?b:a);
+const series=x.pts.map(p=>({p,a:hist[key(curSec,p.r,p.d)]}));let mn=99,mxv=-99;series.forEach(s=>s.a.forEach(([,v])=>{mn=Math.min(mn,v);mxv=Math.max(mxv,v)}));mn-=.3;mxv+=.3;
+g.clearRect(0,0,900,300);g.fillStyle='#888';g.font='16px sans-serif';for(let i=0;i<=4;i++){const v=mn+(mxv-mn)*i/4,y=290-i*70;g.fillText(v.toFixed(1),2,y);g.strokeStyle='#eee';g.beginPath();g.moveTo(40,y);g.lineTo(900,y);g.stroke()}
+series.forEach(({p,a})=>{const h=p===hotP;g.strokeStyle=h?'#ff4d6d':'rgba(90,63,245,.35)';g.lineWidth=h?3:1.5;g.beginPath();a.forEach(([t,v],i)=>{const X=40+860*i/(a.length-1),Y=290-(v-mn)/(mxv-mn)*280;i?g.lineTo(X,Y):g.moveTo(X,Y)});g.stroke()})}
+function alertsV(){return`<h2>Оповещения</h2><div class="sub">Журнал тревог с рекомендациями</div>${alerts.length?alerts.map((a,i)=>`<div class="card"><div class="row"><span class="dot" style="background:${COL[a.l]};width:14px;height:14px"></span><b>${a.text}</b><span class="tiny">${fmt(a.t)}</span></div>
+<div style="margin:6px 0;font-size:14px">${a.det}</div><div class="tiny">${a.rec}</div><div class="row" style="margin-top:8px">${a.ack?'<span class="tiny">✔ подтверждено</span>':`<button class="btn alt" onclick="alerts[${i}].ack=true;render()">Подтвердить</button>`}<button class="btn" onclick="ask('Объясни оповещение: ${a.text}. ${a.det}')">Объяснить с ИИ</button></div></div>`).join(''):'<div class="card">Пока оповещений нет. Запустите очаг на экране «Обзор».</div>'}`}
+function shipV(){return`<h2>Отгрузка</h2><div class="sub">Сначала самые рискованные секции</div>${queue().map((x,i)=>{const b=batches.find(b=>b.sec==x.s+1);return`<div class="card"><b style="color:var(--p);font-size:20px">${i+1}</b> <b>Секция ${x.s+1}</b> ${pill(x.lvl)}<div class="tiny">${b?b.crop+' · '+b.t+' т · партия '+b.id:''}</div><div style="font-size:14px;margin-top:4px">${rec(x.lvl)}</div><div class="bar" style="margin-top:6px"><i style="width:${x.risk}%;background:${COL[x.lvl]}"></i></div></div>`}).join('')}`}
+function batchV(){return`<h2>Партии</h2><div class="sub">Паспорта партий</div>${batches.map(b=>{const x=section(b.sec-1);return`<div class="card"><b>${b.id}</b> ${pill(x.lvl)}<div>${b.crop}</div><div class="tiny">Секция ${b.sec} · ${b.t} т · закладка ${b.date} · средняя T ${x.avg.toFixed(1)} °C</div></div>`}).join('')}
+<div class="card"><b>Новая партия</b><div class="row" style="margin-top:6px"><input id="bc" placeholder="Культура"><input id="bt" type="number" placeholder="Тонн" style="width:90px"><select id="bs">${[1,2,3,4].map(i=>`<option>${i}</option>`)}</select><button class="btn" onclick="addB()">Добавить</button></div></div>`}
+function addB(){if(!bc.value)return;batches.push({id:'П-2026-0'+(batches.length+1),crop:bc.value,sec:+bs.value,t:+bt.value||0,date:new Date().toISOString().slice(0,10)});render()}
+function answer(q){const xs=[...Array(S).keys()].map(section),bad=xs.filter(x=>x.lvl>0).sort((a,b)=>b.risk-a.risk);q=q.toLowerCase();
+if(q.includes('отгруз'))return'Порядок отгрузки: '+queue().map(x=>'секция '+(x.s+1)).join(' → ')+'. Начинайте с секции с наибольшим риском.';
+if(!bad.length)return'Все секции в норме: отклонения между соседними точками меньше 1 °C, роста температуры нет. Продолжайте хранение в штатном режиме.';
+const x=bad[0],p=x.pts.reduce((a,b)=>b.delta>a.delta?b:a);return`Главный риск — секция ${x.s+1} (${LV[x.lvl].toLowerCase()}, риск ${x.risk}/100).
+Точка: штанга ${p.r+1}, ${DEP[p.d]} — ${p.v.toFixed(1)} °C, на ${p.delta.toFixed(1)} °C теплее соседних, рост ${p.rt.toFixed(2)} °C/ч.
+Это типичный признак самосогревания: локальный очаг дыхания продукции или гнили.
+${x.eta?`До 12 °C примерно ${x.eta.toFixed(1)} ч.\n`:''}Что делать: ${rec(x.lvl)}`}
+function ask(q){chat.push(['me',q],['ai',answer(q)]);go('Ассистент ИИ')}
+function aiV(){return`<h2>Ассистент ИИ</h2><div class="sub">Встроенный аналитик (работает без интернета)</div><div class="card">${chat.length?chat.map(([w,t])=>`<div class="msg ${w}">${t}</div>`).join(''):'<div class="tiny">Спросите, например: «Что происходит в хранилище?» или «Какой порядок отгрузки?»</div>'}
+<div class="row" style="margin-top:8px"><input id="q" style="flex:1" placeholder="Ваш вопрос"><button class="btn" onclick="q.value&&ask(q.value)">Спросить</button></div>
+<div class="row" style="margin-top:8px"><button class="btn alt" onclick="ask('Что происходит в хранилище?')">Что происходит?</button><button class="btn alt" onclick="ask('Какой порядок отгрузки?')">Порядок отгрузки</button></div></div>`}
+function render(){navR();const keep=document.activeElement&&document.activeElement.tagName;const v={'Обзор':overview,'Секция':secView,'Оповещения':alertsV,'Отгрузка':shipV,'Партии':batchV,'Ассистент ИИ':aiV}[tab];
+document.getElementById('main').innerHTML=v();chart();clock.textContent='демо-время '+fmt(now)}
+setInterval(()=>{now+=STEP;gen(now);check();const a=document.activeElement;if(a&&(a.tagName=='INPUT'||a.tagName=='SELECT'))return;if(tab!='Ассистент ИИ'&&tab!='Партии')render();else{navR();clock.textContent='демо-время '+fmt(now)}},5000);
+check();render();
+</script></body></html>
